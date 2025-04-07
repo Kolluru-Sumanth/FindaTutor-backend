@@ -22,7 +22,10 @@ const studentSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  phone: String,
+  phone: {
+    type: String,
+    default: "1234567890"
+  },
   bookings: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Booking'

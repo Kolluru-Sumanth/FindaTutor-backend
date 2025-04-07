@@ -2,6 +2,7 @@ const Tutor = require('../db/models/TutorModel');
 const Booking = require('../db/models/BookingsModel');
 const { NotFoundError } = require('../utils/error');
 
+
 // Get all tutors (search/filter)
 const getAllTutors = async (req, res) => {
   try {
@@ -52,12 +53,20 @@ const getTutorById = async (req, res) => {
       .select('-password -__v')
       .populate({
         path: 'bookings',
-        select: 'date status paymentStatus',
-        options: { sort: { date: -1 } }
-      });
+        select: 'studentId date status paymentStatus',
+        populate: { path: 'studentId', select: 'name email' }
+      })
+      .lean(); // Convert to plain JavaScript object
 
     if (!tutor) throw new NotFoundError('Tutor not found');
-    res.status(200).json(tutor);
+
+    // Transform the rating object to a single value
+    const transformedTutor = {
+      ...tutor,
+      rating: tutor.rating?.average || 0 // Use average rating
+    };
+
+    res.status(200).json(transformedTutor);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
   }
@@ -81,9 +90,17 @@ const getTutorProfile = async (req, res) => {
   }
 };
 
-// Update tutor profile
 const updateTutorProfile = async (req, res) => {
   try {
+    // Process image upload
+    if (req.file) {
+      // Replace backslashes with forward slashes (Windows fix)
+      const filePath = req.file.path.replace(/\\/g, "/");
+      // Store URL path like "/uploads/filename.jpg"
+      req.body.profilePicture = `${filePath}`;
+    }
+
+    // Destructure updates (include profilePicture)
     const updates = (({ 
       name, 
       profession, 
@@ -91,7 +108,8 @@ const updateTutorProfile = async (req, res) => {
       price, 
       subjects, 
       locations, 
-      availability 
+      availability,
+      profilePicture // Match the field name in your schema
     }) => ({
       name,
       profession,
@@ -99,7 +117,8 @@ const updateTutorProfile = async (req, res) => {
       price,
       subjects,
       locations,
-      availability
+      availability,
+      profilePicture // Ensure this matches your Mongoose schema
     }))(req.body);
 
     const tutor = await Tutor.findByIdAndUpdate(
@@ -110,11 +129,7 @@ const updateTutorProfile = async (req, res) => {
 
     res.status(200).json(tutor);
   } catch (error) {
-    // Handle duplicate email/username errors
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Email or username already exists' });
-    }
-    res.status(500).json({ message: error.message });
+    // ... error handling
   }
 };
 

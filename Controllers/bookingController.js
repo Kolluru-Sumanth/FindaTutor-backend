@@ -3,62 +3,50 @@ const Student = require('../db/models/StudentModel');
 const Tutor = require('../db/models/TutorModel');
 const { NotFoundError, ConflictError, UnauthorizedError, ForbiddenError } = require('../utils/error');
 
-const createBooking = async (req, res) => {
+const createBooking = async (req, res) => {  
   try {
     const studentId = req.user._id;
-    const { tutorId, date, startTime, endTime } = req.body;
+    const { tutorId ,subject} = req.body;
 
-    // Validate booking date
-    const bookingDate = new Date(date);
-    if (isNaN(bookingDate)) throw new ConflictError('Invalid date format');
-    
-    // Get tutor and availability
-    const tutor = await Tutor.findById(tutorId);
-    if (!tutor) throw new NotFoundError('Tutor not found');
-    
-    // Get day name (e.g., "Monday")
-    const bookingDay = bookingDate.toLocaleDateString('en-US', { weekday: 'long' });
-    const dayAvailability = tutor.availability.find(a => a.day === bookingDay);
-    
-    // Validate availability
-    if (!dayAvailability) throw new ConflictError('Tutor is unavailable on this day');
-    
-    // Check slot validity
-    const validSlot = dayAvailability.slots.some(slot => 
-      slot.startTime === startTime && slot.endTime === endTime
-    );
-    if (!validSlot) throw new ConflictError('Invalid time slot');
+    // // Validate booking date
+    const bookingDate = new Date();
 
     // Check existing bookings
     const existingBooking = await Booking.findOne({
       tutorId,
       date: bookingDate,
-      startTime,
-      endTime,
-      status: { $in: ['pending', 'confirmed', 'canceled'] }
+      status: { $in: ['pending', 'confirmed'] }
     });
     if (existingBooking) throw new ConflictError('Slot already booked');
-      status: { $in: ['pending', 'confirmed', 'canceled'] }
-    // Create booking
+
+    // Create booking with payment status
+    const bookingStatus = 'pending';
+    
+    // Create a new booking
     const booking = await Booking.create({
       studentId,
       tutorId,
       date: bookingDate,
-      startTime,
-      endTime,
-      status: 'pending'
+      status: bookingStatus,
+      subject
     });
 
-    // Update tutor and student bookings
-    await Tutor.findByIdAndUpdate(tutorId, { $push: { bookings: booking._id } });
-    await Student.findByIdAndUpdate(studentId, { $push: { bookings: booking._id } });
 
-    res.status(201).json(booking);
+
   } catch (error) {
-    res.status(error.statusCode || 500).json({ message: error.message });
+    console.error(error);
+    
+    // Cleanup booking if error occurred after creation
+    if (error.booking) {
+      await Booking.findByIdAndDelete(error.booking._id);
+    }
+
+    res.status(error.statusCode || 500).json({ 
+      success: false, 
+      message: error.message || "Booking creation failed" 
+    });
   }
 };
-
 // Get booking details
 const getBookingDetails = async (req, res) => {
   try {
@@ -95,7 +83,7 @@ const getStudentBookings = async (req, res) => {
 const getTutorBookings = async (req, res) => {
   try {
     const bookings = await Booking.find({ tutorId: req.user._id })
-      .populate('studentId', 'name email')
+      .populate('studentId', 'name email phone')
       .sort({ date: -1 });
 
     res.status(200).json(bookings);
@@ -123,7 +111,8 @@ const updateBookingStatus = async (req, res) => {
 
     if (isStudent && !['canceled'].includes(status)) throw new UnauthorizedError('Students can only cancel bookings');
     if (isTutor && !['confirmed', 'canceled'].includes(status)) throw new UnauthorizedError('Invalid action');
-
+    booking.status = status;
+    await booking.save();
     res.status(200).json(booking);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

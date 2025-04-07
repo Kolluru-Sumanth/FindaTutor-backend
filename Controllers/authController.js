@@ -50,10 +50,6 @@ const tutorSignup = async (req, res) => {
   try {
     const { name, username, email, password, profession, availability } = req.body;
 
-    // Validate availability
-    if (!availability || availability.length === 0) {
-      return res.status(400).json({ message: 'At least one availability slot is required' });
-    }
 
     // Check for existing tutor
     const existingTutor = await Tutor.findOne({ $or: [{ username }, { email }] });
@@ -115,6 +111,7 @@ const studentLogin = async (req, res) => {
       _id: student._id,
       name: student.name,
       email: student.email,
+      phone: req.body.phone,
       token,
     });
   } catch (error) {

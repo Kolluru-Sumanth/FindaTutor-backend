@@ -7,22 +7,22 @@ const { NotFoundError, ForbiddenError } = require('../utils/error');
 const createReview = async (req, res) => {
   try {
     const studentId = req.user._id;
-    const { tutorId, bookingId, rating, comment } = req.body;
+    const { tutorId, rating, comment } = req.body;
 
     // Validate booking exists and is completed
-    const booking = await Booking.findById(bookingId);
-    if (!booking) throw new NotFoundError('Booking not found');
-    if (booking.status !== 'completed') {
-      throw new ForbiddenError('You can only review completed sessions');
-    }
+    // const booking = await Booking.findById(bookingId);
+    // if (!booking) throw new NotFoundError('Booking not found');
+    // if (booking.status !== 'completed') {
+    //   throw new ForbiddenError('You can only review completed sessions');
+    // }
 
-    // Ensure student is the one who made the booking
-    if (!booking.studentId.equals(studentId)) {
-      throw new ForbiddenError('Not authorized to review this session');
-    }
+    // // Ensure student is the one who made the booking
+    // if (!booking.studentId.equals(studentId)) {
+    //   throw new ForbiddenError('Not authorized to review this session');
+    // }
 
     // Check for existing review for this booking
-    const existingReview = await Review.findOne({ bookingId });
+    const existingReview = await Review.findOne({ studentId, tutorId });
     if (existingReview) {
       throw new ConflictError('You already reviewed this session');
     }
@@ -31,7 +31,6 @@ const createReview = async (req, res) => {
     const review = await Review.create({
       studentId,
       tutorId,
-      bookingId,
       rating,
       comment
     });

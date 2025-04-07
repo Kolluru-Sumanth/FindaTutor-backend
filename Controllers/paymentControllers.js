@@ -5,29 +5,40 @@ const { NotFoundError } = require('../utils/error');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Create Stripe payment intent
-const createPaymentIntent = async (req, res) => {
+const createCheckoutSession = async (req, res) => {
   try {
     const { bookingId } = req.body;
     const studentId = req.user._id;
 
     // Get booking details
     const booking = await Booking.findById(bookingId)
-      .populate('tutorId', 'price');
+      .populate('tutorId', 'price name');
     
     if (!booking) throw new NotFoundError('Booking not found');
     if (booking.status !== 'confirmed') {
       return res.status(400).json({ message: 'Booking is not confirmed' });
     }
 
-    // Calculate amount (price per hour * duration)
-    const amount = Math.round(booking.tutorId.price * booking.duration * 100); // Convert to cents
+    // Calculate amount (price per hour * duration) in cents (Stripe expects smallest currency unit)
+    const amount = Math.round(booking.tutorId.price * booking.duration * 100); // INR paise
 
-    // Create Stripe Payment Intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: 'usd',
-      automatic_payment_methods: { enabled: true },
-      metadata: { bookingId: bookingId.toString() }
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'inr',
+          product_data: {
+            name: `Tutoring Session with ${booking.tutorId.name}`,
+          },
+          unit_amount: amount,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/payment-cancelled`,
+      metadata: { bookingId: bookingId.toString() },
     });
 
     // Save payment record
@@ -35,13 +46,14 @@ const createPaymentIntent = async (req, res) => {
       bookingId,
       studentId,
       tutorId: booking.tutorId._id,
-      amount: amount / 100, // Store in dollars
-      transactionId: paymentIntent.id,
-      status: paymentIntent.status
+      amount: amount / 100, // Store in INR (not paise)
+      transactionId: session.id,
+      status: 'pending' // Checkout sessions start as 'pending'
     });
 
-    res.status(201).json({
-      clientSecret: paymentIntent.client_secret,
+    // Return the Stripe Checkout URL
+    res.status(200).json({ 
+      checkoutUrl: session.url,
       paymentId: payment._id
     });
   } catch (error) {

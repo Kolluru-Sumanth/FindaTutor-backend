@@ -9,8 +9,6 @@ const tutorSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
-    unique: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
   },
   password: {
     type: String,
@@ -23,29 +21,20 @@ const tutorSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  profilePicture: String,
-  pfp: String,
+  profilePicture: {type: String ,default:""},
   profession: String,
   about: String,
   price: {
     type: Number,
-    required: true
-  },
+    default: 100},
   subjects: {
     type: [String],
-    validate: {
-      validator: function(v) {
-        return v.length > 0;
-      },
-      message: 'At least one subject is required'
-    }
+    default: ["Mathematics"]
   },
   locations: {
     type: [String],
-    validate: {
-      validator: (v) => v.length > 0,
-      message: "At least one location is required"
-    }
+    default: ["India"]
+    
   },
   bookings: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -76,10 +65,7 @@ const tutorSchema = new mongoose.Schema({
       }]
     }],
     required: [true, "Availability is required"],
-    validate: {
-      validator: (v) => v.length > 0,
-      message: "At least one availability slot is required"
-    }
+    
   },
   contact: {
     phone: String,
